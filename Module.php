@@ -125,12 +125,18 @@ class Module extends AbstractModule
         ];
         $configJson   = json_encode($jsConfig);
 
+        // Append mtime-based cache-bust so browsers always load the latest
+        // version of the JS after module updates.
+        $assetDir   = __DIR__ . '/asset/js/';
+        $vResources = @filemtime($assetDir . 'webmcp-resources.js') ?: 0;
+        $vMain      = @filemtime($assetDir . 'webmcp.js')           ?: 0;
+
         $view->headScript()->appendScript("window.WebMCPConfig = {$configJson};");
         $view->headScript()->appendFile(
-            $view->assetUrl('js/webmcp-resources.js', 'WebMCP')
+            $view->assetUrl('js/webmcp-resources.js', 'WebMCP') . '?v=' . $vResources
         );
         $view->headScript()->appendFile(
-            $view->assetUrl('js/webmcp.js', 'WebMCP')
+            $view->assetUrl('js/webmcp.js', 'WebMCP') . '?v=' . $vMain
         );
     }
 

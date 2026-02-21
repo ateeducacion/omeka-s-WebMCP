@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace WebMCP\Controller\Admin;
@@ -105,9 +106,15 @@ class WebMCPProxyController extends AbstractActionController
      */
     protected function runOperation(string $op, string $resource, $id, array $query, $data, array $ids): array
     {
+        // The Omeka controller plugin catches ValidationException internally
+        // and returns false unless throwValidationException=true is passed to
+        // __invoke(). Using api(null, true) ensures exceptions propagate so
+        // proxyAction() can map them to proper HTTP status codes.
+        $api = $this->api(null, true);
+
         switch ($op) {
             case 'search':
-                $response = $this->api()->search($resource, $query);
+                $response = $api->search($resource, $query);
                 return [
                     'items'         => json_decode(json_encode($response->getContent()), true),
                     'total_results' => $response->getTotalResults(),
@@ -115,27 +122,29 @@ class WebMCPProxyController extends AbstractActionController
 
             case 'get':
                 return json_decode(json_encode(
-                    $this->api()->read($resource, $id)->getContent()
+                    $api->read($resource, $id)->getContent()
                 ), true);
 
             case 'create':
+                $normalized = $this->normalizePropertyData(is_array($data) ? $data : []);
                 return json_decode(json_encode(
-                    $this->api()->create($resource, is_array($data) ? $data : [])->getContent()
+                    $api->create($resource, $normalized)->getContent()
                 ), true);
 
             case 'update':
                 // Read current representation first so that the PUT does not wipe
                 // fields that the caller did not explicitly include in $data.
-                $current = json_decode(json_encode(
-                    $this->api()->read($resource, $id)->getContent()
+                $current    = json_decode(json_encode(
+                    $api->read($resource, $id)->getContent()
                 ), true);
-                $merged  = array_merge($current, is_array($data) ? $data : []);
+                $normalized = $this->normalizePropertyData(is_array($data) ? $data : []);
+                $merged     = array_merge($current, $normalized);
                 return json_decode(json_encode(
-                    $this->api()->update($resource, $id, $merged)->getContent()
+                    $api->update($resource, $id, $merged)->getContent()
                 ), true);
 
             case 'delete':
-                $this->api()->delete($resource, $id);
+                $api->delete($resource, $id);
                 return ['deleted' => true, 'id' => $id];
 
             case 'batch_create':
@@ -143,8 +152,9 @@ class WebMCPProxyController extends AbstractActionController
                 $errors  = [];
                 foreach ((array) $data as $item) {
                     try {
+                        $normalized = $this->normalizePropertyData(is_array($item) ? $item : []);
                         $results[] = json_decode(json_encode(
-                            $this->api()->create($resource, is_array($item) ? $item : [])->getContent()
+                            $api->create($resource, $normalized)->getContent()
                         ), true);
                     } catch (\Exception $e) {
                         $errors[] = ['error' => true, 'message' => $e->getMessage()];
@@ -163,7 +173,7 @@ class WebMCPProxyController extends AbstractActionController
                 $errors  = [];
                 foreach ($ids as $itemId) {
                     try {
-                        $this->api()->delete($resource, $itemId);
+                        $api->delete($resource, $itemId);
                         $deleted[] = $itemId;
                     } catch (\Exception $e) {
                         $errors[] = ['id' => $itemId, 'error' => true, 'message' => $e->getMessage()];
@@ -179,5 +189,39 @@ class WebMCPProxyController extends AbstractActionController
             default:
                 throw new \InvalidArgumentException("Unknown operation: {$op}");
         }
+    }
+
+    /**
+     * Add 'property_id' => 'auto' to property values that lack one.
+     *
+     * Omeka's ValueHydrator silently ignores values that do not have a
+     * property_id set. When property_id is the string 'auto', the hydrator
+     * resolves the property from the vocabulary term used as the array key
+     * (e.g. 'dcterms:title' → property ID 1).
+     *
+     * This method mutates only property term keys (keys containing ':' that
+     * do not begin with 'o:' or '@').
+     *
+     * @param array $data
+     * @return array
+     */
+    protected function normalizePropertyData(array $data): array
+    {
+        foreach ($data as $key => &$values) {
+            if (!is_array($values) || false === strpos($key, ':')) {
+                continue;
+            }
+            if (str_starts_with($key, 'o:') || str_starts_with($key, '@')) {
+                continue;
+            }
+            foreach ($values as &$v) {
+                if (is_array($v) && !isset($v['property_id'])) {
+                    $v['property_id'] = 'auto';
+                }
+            }
+            unset($v);
+        }
+        unset($values);
+        return $data;
     }
 }

@@ -67,12 +67,19 @@ Proxy payload format:
 | `delete-item` | Delete an item |
 | `search-items` | Search by full-text, template, item set, or properties |
 | `get-item` | Get a single item by ID |
+| `catalog-item` | Set full catalog metadata: Dublin Core fields, resource class, resource template |
 
 ### Media Management
 | Tool | Description |
 |------|-------------|
 | `upload-media` | Navigate to the item edit page for media upload |
 | `list-media` | List media attached to an item |
+| `add-media-url` | Fetch a file from a URL and store it locally (supports picsum.photos, pravatar.cc, etc.) |
+| `add-media-html` | Attach an inline HTML snippet as media |
+| `add-media-embed` | Attach an oEmbed resource (Vimeo, SoundCloud, Flickr, etc.) |
+| `add-media-youtube` | Attach a YouTube video (with optional start/end times) |
+| `add-media-iiif` | Attach a IIIF Image API resource (info.json URL) |
+| `add-media-iiif-presentation` | Attach a IIIF Presentation manifest |
 
 ### Item Set Management
 | Tool | Description |
@@ -102,6 +109,7 @@ Proxy payload format:
 |------|-------------|
 | `list-vocabularies` | List available vocabularies |
 | `list-properties` | List properties of a vocabulary |
+| `list-resource-classes` | List RDF classes (dctype:Image, foaf:Person, schema:Place, …) |
 | `list-resource-templates` | List resource templates |
 | `get-resource-template` | Get a resource template by ID |
 
