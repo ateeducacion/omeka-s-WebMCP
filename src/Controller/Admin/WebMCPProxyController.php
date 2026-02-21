@@ -33,8 +33,7 @@ class WebMCPProxyController extends AbstractActionController
         // CSRF validation: token is sent in the X-CSRF-Token request header.
         $csrfHeader = $request->getHeader('X-CSRF-Token');
         $token      = $csrfHeader ? $csrfHeader->getFieldValue() : '';
-        $csrf       = new Csrf(['name' => 'webmcp_proxy', 'timeout' => null]);
-        if (!$csrf->isValid($token)) {
+        if (!$this->isCsrfTokenValid($token)) {
             $this->getResponse()->setStatusCode(403);
             return new JsonModel(['error' => true, 'message' => 'Invalid CSRF token.']);
         }
@@ -79,6 +78,21 @@ class WebMCPProxyController extends AbstractActionController
     }
 
     /**
+     * Validate the CSRF token provided in the request header.
+     *
+     * Extracted to a protected method so test subclasses can bypass the
+     * session-backed Laminas\Validator\Csrf without needing a real session.
+     *
+     * @param string $token
+     * @return bool
+     */
+    protected function isCsrfTokenValid(string $token): bool
+    {
+        $csrf = new Csrf(['name' => 'webmcp_proxy', 'timeout' => null]);
+        return $csrf->isValid($token);
+    }
+
+    /**
      * Dispatch the requested operation to Omeka\ApiManager.
      *
      * @param string     $op       Operation: search|get|create|update|delete|batch_create|batch_delete
@@ -89,7 +103,7 @@ class WebMCPProxyController extends AbstractActionController
      * @param array      $ids      Array of IDs for batch_delete
      * @return array
      */
-    private function runOperation(string $op, string $resource, $id, array $query, $data, array $ids): array
+    protected function runOperation(string $op, string $resource, $id, array $query, $data, array $ids): array
     {
         switch ($op) {
             case 'search':

@@ -37,7 +37,9 @@
         "squizlabs/php_codesniffer": "*",
         "phpunit/phpunit": "*",
         "zerocrates/extract-tagged-strings": "dev-master",
-        "laminas/laminas-form": "^3.4"
+        "laminas/laminas-form": "^3.4",
+        "laminas/laminas-mvc": "^3.8",
+        "laminas/laminas-session": "^2.25"
     },
     "autoload": {
         "psr-4": {
@@ -46,7 +48,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "ModuleTemplateTest\\": "test/"
+            "WebMCPTest\\": "test/WebMCPTest/"
         }
     },
     "repositories": [

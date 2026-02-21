@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-namespace ModuleTemplateTest\Form;
+namespace WebMCPTest\Form;
 
 use PHPUnit\Framework\TestCase;
 use WebMCP\Form\ConfigForm;
