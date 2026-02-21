@@ -41,12 +41,12 @@ services:
         # Create an Editor user if missing
         omeka-s-cli user:add "editor@example.com" "Editor" editor "1234" || true
 
-        # Enable the ModuleTemplate module from local source
-        omeka-s-cli module:install ModuleTemplate || true
+        # Enable the WebMCP module from local source
+        omeka-s-cli module:install WebMCP || true
 
     volumes:
       - omekas_data:/var/www/html/volume:Z
-      - ./:/var/www/html/volume/modules/ModuleTemplate
+      - ./:/var/www/html/volume/modules/WebMCP
       - ./data:/data:ro
 
   mariadb:

@@ -4,6 +4,11 @@
  * Registers tools via navigator.modelContext.registerTool() so that AI agents
  * (browser extensions, built-in browser agents) can discover and invoke them.
  *
+ * All operations are routed through the server-side proxy at
+ * /admin/webmcp/proxy, which uses Omeka\ApiManager internally and therefore
+ * runs inside Omeka-S's own request lifecycle. This bypasses any JWT
+ * middleware that would block direct /api/* calls.
+ *
  * @see https://webmachinelearning.github.io/webmcp/
  */
 
@@ -19,61 +24,58 @@
         return;
     }
 
+    // Runtime config injected by PHP (tool-group flags, CSRF token, proxy URL).
+    const config           = window.WebMCPConfig || {};
+    const groupItems       = config.items        === true;
+    const groupMedia       = config.media        === true;
+    const groupItemSets    = config.item_sets    === true;
+    const groupSites       = config.sites        === true;
+    const groupUsers       = config.users        === true;
+    const groupVocabs      = config.vocabularies === true;
+    const groupBulk        = config.bulk         === true;
+    const _proxyUrl        = config.proxy_url    || '/admin/webmcp/proxy';
+
     /**
-     * Retrieve the CSRF token from the Omeka-S admin page.
+     * Retrieve the CSRF token injected by PHP into window.WebMCPConfig.
      *
-     * @returns {string} CSRF token value, or empty string if not found.
+     * @returns {string}
      */
     function getCsrfToken() {
-        const meta = document.querySelector('meta[name="csrf-token"]');
-        if (meta) {
-            return meta.getAttribute('content') || '';
-        }
-        // Fallback: check for inline JS variable
-        if (typeof Omeka !== 'undefined' && Omeka.csrfToken) {
-            return Omeka.csrfToken;
-        }
-        return '';
+        return (window.WebMCPConfig && window.WebMCPConfig.csrf_token) || '';
     }
 
     /**
-     * Build common fetch headers for Omeka-S REST API requests.
+     * POST a payload to the server-side proxy and return the parsed response.
      *
-     * @returns {Object} Headers object.
-     */
-    function apiHeaders() {
-        const headers = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        };
-        const csrf = getCsrfToken();
-        if (csrf) {
-            headers['X-CSRF-Token'] = csrf;
-        }
-        return headers;
-    }
-
-    /**
-     * Perform a fetch request against the Omeka-S REST API.
+     * The proxy wraps results in {success:true, data:...} or {error:true, message:...}.
+     * This function returns the full wrapper object — callers should check
+     * result.error before using result.data.
      *
-     * @param {string} method  HTTP method.
-     * @param {string} path    API path (e.g. '/api/items').
-     * @param {Object} [body]  Request body for POST/PUT.
-     * @returns {Promise<Object>} Parsed JSON response.
+     * @param {Object} payload  {op, resource, id?, query?, data?, ids?}
+     * @returns {Promise<Object>}
      */
-    async function apiFetch(method, path, body) {
-        const options = {
-            method,
-            headers: apiHeaders(),
-            credentials: 'same-origin',
-        };
-        if (body !== undefined) {
-            options.body = JSON.stringify(body);
-        }
-        const response = await fetch(path, options);
+    async function proxyFetch(payload) {
+        const response = await fetch(_proxyUrl, {
+            method: 'POST',
+            // 'include' (not 'same-origin') is required because the WebMCP
+            // extension calls execute callbacks from an isolated context whose
+            // origin is chrome-extension://, not the page origin.
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken(),
+            },
+            body: JSON.stringify(payload),
+        });
         if (!response.ok) {
             const text = await response.text();
-            throw new Error(`API error ${response.status}: ${text}`);
+            let message = `Proxy error ${response.status}`;
+            try {
+                const json = JSON.parse(text);
+                message = json.message || message;
+                if (json.details) message += `: ${json.details}`;
+            } catch (_) { /* keep generic message */ }
+            throw new Error(message);
         }
         return response.json();
     }
@@ -89,16 +91,23 @@
     }
 
     // -------------------------------------------------------------------------
-    // Tool group detection via WebMCPConfig injected by PHP
+    // Role-awareness: detect the current user's role via the proxy so the AI
+    // can skip privileged operations it would not be permitted to run.
     // -------------------------------------------------------------------------
-    const config = window.WebMCPConfig || {};
-    const groupItems        = config.items        === true;
-    const groupMedia        = config.media        === true;
-    const groupItemSets     = config.item_sets    === true;
-    const groupSites        = config.sites        === true;
-    const groupUsers        = config.users        === true;
-    const groupVocabularies = config.vocabularies === true;
-    const groupBulk         = config.bulk         === true;
+    document.addEventListener('DOMContentLoaded', function () {
+        const userLink = document.querySelector('#user-bar a[href*="/admin/user/"]');
+        if (!userLink) return;
+        const match = userLink.getAttribute('href').match(/\/user\/(\d+)/);
+        if (!match) return;
+        proxyFetch({ op: 'get', resource: 'users', id: parseInt(match[1], 10) })
+            .then((result) => {
+                if (!result.error && result.data && result.data['o:role']) {
+                    window.WebMCPConfig = window.WebMCPConfig || {};
+                    window.WebMCPConfig.currentRole = result.data['o:role'];
+                }
+            })
+            .catch(() => {});
+    });
 
     // =========================================================================
     // Item / Resource Management Tools
@@ -107,7 +116,7 @@
     if (groupItems) {
         navigator.modelContext.registerTool({
             name: 'create-item',
-            description: 'Create a new item in Omeka-S.',
+            description: 'Create a new item in Omeka-S. Requires role: editor, site_admin, or global_admin.',
             inputSchema: {
                 type: 'object',
                 properties: {
@@ -128,14 +137,16 @@
             },
             execute: async (input) => {
                 try {
-                    const body = { ...input.properties };
+                    const data = { ...input.properties };
                     if (input.resource_template_id) {
-                        body['o:resource_template'] = { 'o:id': input.resource_template_id };
+                        data['o:resource_template'] = { 'o:id': input.resource_template_id };
                     }
                     if (input.item_set_ids && input.item_set_ids.length) {
-                        body['o:item_set'] = input.item_set_ids.map((id) => ({ 'o:id': id }));
+                        data['o:item_set'] = input.item_set_ids.map((id) => ({ 'o:id': id }));
                     }
-                    return await apiFetch('POST', '/api/items', body);
+                    const result = await proxyFetch({ op: 'create', resource: 'items', data });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -144,7 +155,7 @@
 
         navigator.modelContext.registerTool({
             name: 'update-item',
-            description: 'Update an existing item in Omeka-S.',
+            description: 'Update an existing item in Omeka-S. Requires role: editor, site_admin, or global_admin.',
             inputSchema: {
                 type: 'object',
                 required: ['id'],
@@ -158,7 +169,14 @@
             },
             execute: async (input) => {
                 try {
-                    return await apiFetch('PUT', `/api/items/${input.id}`, input.properties || {});
+                    const result = await proxyFetch({
+                        op: 'update',
+                        resource: 'items',
+                        id: input.id,
+                        data: input.properties || {},
+                    });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -167,7 +185,7 @@
 
         navigator.modelContext.registerTool({
             name: 'delete-item',
-            description: 'Delete an item from Omeka-S. Shows a confirmation dialog before deleting.',
+            description: 'Delete an item from Omeka-S. Shows a confirmation dialog before deleting. Requires role: editor, site_admin, or global_admin.',
             inputSchema: {
                 type: 'object',
                 required: ['id'],
@@ -186,7 +204,8 @@
                             return { cancelled: true, message: 'Deletion cancelled by user.' };
                         }
                     }
-                    await apiFetch('DELETE', `/api/items/${input.id}`);
+                    const result = await proxyFetch({ op: 'delete', resource: 'items', id: input.id });
+                    if (result.error) return result;
                     return { success: true, message: `Item #${input.id} deleted.` };
                 } catch (err) {
                     return errorResult(err);
@@ -221,25 +240,18 @@
             },
             execute: async (input) => {
                 try {
-                    const params = new URLSearchParams();
-                    if (input.fulltext_search) params.set('fulltext_search', input.fulltext_search);
-                    if (input.resource_template_id) params.set('resource_template_id', String(input.resource_template_id));
-                    if (input.item_set_id) params.set('item_set_id', String(input.item_set_id));
-                    params.set('per_page', String(input.per_page || 25));
-                    params.set('page', String(input.page || 1));
+                    const query = {};
+                    if (input.fulltext_search)     query.fulltext_search     = input.fulltext_search;
+                    if (input.resource_template_id) query.resource_template_id = input.resource_template_id;
+                    if (input.item_set_id)          query.item_set_id          = input.item_set_id;
+                    query.per_page = input.per_page || 25;
+                    query.page     = input.page     || 1;
                     if (input.property && Array.isArray(input.property)) {
-                        input.property.forEach((filter, i) => {
-                            if (filter.property) params.set(`property[${i}][property]`, filter.property);
-                            if (filter.type) params.set(`property[${i}][type]`, filter.type);
-                            if (filter.text) params.set(`property[${i}][text]`, filter.text);
-                        });
+                        query.property = input.property;
                     }
-                    const response = await fetch(`/api/items?${params.toString()}`, {
-                        headers: apiHeaders(),
-                        credentials: 'same-origin',
-                    });
-                    if (!response.ok) throw new Error(`API error ${response.status}`);
-                    return response.json();
+                    const result = await proxyFetch({ op: 'search', resource: 'items', query });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -258,7 +270,9 @@
             },
             execute: async (input) => {
                 try {
-                    return await apiFetch('GET', `/api/items/${input.id}`);
+                    const result = await proxyFetch({ op: 'get', resource: 'items', id: input.id });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -284,8 +298,7 @@
             execute: async (input) => {
                 try {
                     // Navigate to the item edit page so the user can upload via the form.
-                    const url = `/admin/item/${input.item_id}/edit#media`;
-                    window.location.href = url;
+                    window.location.href = `/admin/item/${input.item_id}/edit#media`;
                     return { success: true, message: `Navigated to item #${input.item_id} edit page for media upload.` };
                 } catch (err) {
                     return errorResult(err);
@@ -305,7 +318,13 @@
             },
             execute: async (input) => {
                 try {
-                    return await apiFetch('GET', `/api/media?item_id=${input.item_id}`);
+                    const result = await proxyFetch({
+                        op: 'search',
+                        resource: 'media',
+                        query: { item_id: input.item_id },
+                    });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -320,7 +339,7 @@
     if (groupItemSets) {
         navigator.modelContext.registerTool({
             name: 'create-item-set',
-            description: 'Create a new item set (collection) in Omeka-S.',
+            description: 'Create a new item set (collection) in Omeka-S. Requires role: editor, site_admin, or global_admin.',
             inputSchema: {
                 type: 'object',
                 properties: {
@@ -332,7 +351,13 @@
             },
             execute: async (input) => {
                 try {
-                    return await apiFetch('POST', '/api/item_sets', input.properties || {});
+                    const result = await proxyFetch({
+                        op: 'create',
+                        resource: 'item_sets',
+                        data: input.properties || {},
+                    });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -341,7 +366,7 @@
 
         navigator.modelContext.registerTool({
             name: 'update-item-set',
-            description: 'Update an existing item set in Omeka-S.',
+            description: 'Update an existing item set in Omeka-S. Requires role: editor, site_admin, or global_admin.',
             inputSchema: {
                 type: 'object',
                 required: ['id'],
@@ -355,7 +380,14 @@
             },
             execute: async (input) => {
                 try {
-                    return await apiFetch('PUT', `/api/item_sets/${input.id}`, input.properties || {});
+                    const result = await proxyFetch({
+                        op: 'update',
+                        resource: 'item_sets',
+                        id: input.id,
+                        data: input.properties || {},
+                    });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -364,7 +396,7 @@
 
         navigator.modelContext.registerTool({
             name: 'delete-item-set',
-            description: 'Delete an item set from Omeka-S. Shows a confirmation dialog before deleting.',
+            description: 'Delete an item set from Omeka-S. Shows a confirmation dialog before deleting. Requires role: editor, site_admin, or global_admin.',
             inputSchema: {
                 type: 'object',
                 required: ['id'],
@@ -383,7 +415,8 @@
                             return { cancelled: true, message: 'Deletion cancelled by user.' };
                         }
                     }
-                    await apiFetch('DELETE', `/api/item_sets/${input.id}`);
+                    const result = await proxyFetch({ op: 'delete', resource: 'item_sets', id: input.id });
+                    if (result.error) return result;
                     return { success: true, message: `Item set #${input.id} deleted.` };
                 } catch (err) {
                     return errorResult(err);
@@ -403,16 +436,13 @@
             },
             execute: async (input) => {
                 try {
-                    const params = new URLSearchParams({
-                        per_page: String(input.per_page || 25),
-                        page: String(input.page || 1),
+                    const result = await proxyFetch({
+                        op: 'search',
+                        resource: 'item_sets',
+                        query: { per_page: input.per_page || 25, page: input.page || 1 },
                     });
-                    const response = await fetch(`/api/item_sets?${params.toString()}`, {
-                        headers: apiHeaders(),
-                        credentials: 'same-origin',
-                    });
-                    if (!response.ok) throw new Error(`API error ${response.status}`);
-                    return response.json();
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -427,19 +457,21 @@
     if (groupSites) {
         navigator.modelContext.registerTool({
             name: 'create-site',
-            description: 'Create a new Omeka-S site.',
+            description: 'Create a new Omeka-S site. Requires role: global_admin.',
             inputSchema: {
                 type: 'object',
                 required: ['o:title', 'o:slug'],
                 properties: {
                     'o:title': { type: 'string', description: 'Site title.' },
-                    'o:slug': { type: 'string', description: 'Site URL slug.' },
+                    'o:slug':  { type: 'string', description: 'Site URL slug.' },
                     'o:theme': { type: 'string', description: 'Theme name (optional).' },
                 },
             },
             execute: async (input) => {
                 try {
-                    return await apiFetch('POST', '/api/sites', input);
+                    const result = await proxyFetch({ op: 'create', resource: 'sites', data: input });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -448,21 +480,23 @@
 
         navigator.modelContext.registerTool({
             name: 'update-site',
-            description: 'Update an existing Omeka-S site.',
+            description: 'Update an existing Omeka-S site. Requires role: global_admin.',
             inputSchema: {
                 type: 'object',
                 required: ['id'],
                 properties: {
-                    id: { type: 'integer', description: 'Site ID to update.' },
-                    'o:title': { type: 'string', description: 'New title.' },
-                    'o:slug': { type: 'string', description: 'New URL slug.' },
-                    'o:theme': { type: 'string', description: 'New theme name.' },
+                    id:        { type: 'integer', description: 'Site ID to update.' },
+                    'o:title': { type: 'string',  description: 'New title.' },
+                    'o:slug':  { type: 'string',  description: 'New URL slug.' },
+                    'o:theme': { type: 'string',  description: 'New theme name.' },
                 },
             },
             execute: async (input) => {
                 try {
                     const { id, ...fields } = input;
-                    return await apiFetch('PUT', `/api/sites/${id}`, fields);
+                    const result = await proxyFetch({ op: 'update', resource: 'sites', id, data: fields });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -475,7 +509,9 @@
             inputSchema: { type: 'object', properties: {} },
             execute: async () => {
                 try {
-                    return await apiFetch('GET', '/api/sites');
+                    const result = await proxyFetch({ op: 'search', resource: 'sites' });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -490,12 +526,12 @@
     if (groupUsers) {
         navigator.modelContext.registerTool({
             name: 'create-user',
-            description: 'Create a new Omeka-S user.',
+            description: 'Create a new Omeka-S user. Requires role: global_admin.',
             inputSchema: {
                 type: 'object',
                 required: ['o:name', 'o:email', 'o:role'],
                 properties: {
-                    'o:name': { type: 'string', description: 'User display name.' },
+                    'o:name':  { type: 'string', description: 'User display name.' },
                     'o:email': { type: 'string', description: 'User email address.' },
                     'o:role': {
                         type: 'string',
@@ -506,7 +542,14 @@
             },
             execute: async (input) => {
                 try {
-                    return await apiFetch('POST', '/api/users', input);
+                    // o:is_active must be true or the account cannot log in.
+                    const result = await proxyFetch({
+                        op: 'create',
+                        resource: 'users',
+                        data: { ...input, 'o:is_active': true },
+                    });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -515,14 +558,14 @@
 
         navigator.modelContext.registerTool({
             name: 'update-user',
-            description: 'Update an existing Omeka-S user.',
+            description: 'Update an existing Omeka-S user. Requires role: global_admin.',
             inputSchema: {
                 type: 'object',
                 required: ['id'],
                 properties: {
-                    id: { type: 'integer', description: 'User ID to update.' },
-                    'o:name': { type: 'string', description: 'New display name.' },
-                    'o:email': { type: 'string', description: 'New email address.' },
+                    id:        { type: 'integer', description: 'User ID to update.' },
+                    'o:name':  { type: 'string',  description: 'New display name.' },
+                    'o:email': { type: 'string',  description: 'New email address.' },
                     'o:role': {
                         type: 'string',
                         enum: ['global_admin', 'site_admin', 'editor', 'reviewer', 'author', 'researcher'],
@@ -532,7 +575,9 @@
             execute: async (input) => {
                 try {
                     const { id, ...fields } = input;
-                    return await apiFetch('PUT', `/api/users/${id}`, fields);
+                    const result = await proxyFetch({ op: 'update', resource: 'users', id, data: fields });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -541,7 +586,7 @@
 
         navigator.modelContext.registerTool({
             name: 'delete-user',
-            description: 'Delete an Omeka-S user. Shows a confirmation dialog before deleting.',
+            description: 'Delete an Omeka-S user. Shows a confirmation dialog before deleting. Requires role: global_admin.',
             inputSchema: {
                 type: 'object',
                 required: ['id'],
@@ -560,7 +605,8 @@
                             return { cancelled: true, message: 'Deletion cancelled by user.' };
                         }
                     }
-                    await apiFetch('DELETE', `/api/users/${input.id}`);
+                    const result = await proxyFetch({ op: 'delete', resource: 'users', id: input.id });
+                    if (result.error) return result;
                     return { success: true, message: `User #${input.id} deleted.` };
                 } catch (err) {
                     return errorResult(err);
@@ -570,11 +616,13 @@
 
         navigator.modelContext.registerTool({
             name: 'list-users',
-            description: 'List all Omeka-S users.',
+            description: 'List all Omeka-S users. Requires role: global_admin.',
             inputSchema: { type: 'object', properties: {} },
             execute: async () => {
                 try {
-                    return await apiFetch('GET', '/api/users');
+                    const result = await proxyFetch({ op: 'search', resource: 'users' });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -586,14 +634,16 @@
     // Vocabulary & Resource Template Tools
     // =========================================================================
 
-    if (groupVocabularies) {
+    if (groupVocabs) {
         navigator.modelContext.registerTool({
             name: 'list-vocabularies',
             description: 'List available vocabularies (e.g. Dublin Core) in Omeka-S.',
             inputSchema: { type: 'object', properties: {} },
             execute: async () => {
                 try {
-                    return await apiFetch('GET', '/api/vocabularies');
+                    const result = await proxyFetch({ op: 'search', resource: 'vocabularies' });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -612,7 +662,13 @@
             },
             execute: async (input) => {
                 try {
-                    return await apiFetch('GET', `/api/properties?vocabulary_id=${input.vocabulary_id}`);
+                    const result = await proxyFetch({
+                        op: 'search',
+                        resource: 'properties',
+                        query: { vocabulary_id: input.vocabulary_id },
+                    });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -625,7 +681,9 @@
             inputSchema: { type: 'object', properties: {} },
             execute: async () => {
                 try {
-                    return await apiFetch('GET', '/api/resource_templates');
+                    const result = await proxyFetch({ op: 'search', resource: 'resource_templates' });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -644,7 +702,9 @@
             },
             execute: async (input) => {
                 try {
-                    return await apiFetch('GET', `/api/resource_templates/${input.id}`);
+                    const result = await proxyFetch({ op: 'get', resource: 'resource_templates', id: input.id });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -673,12 +733,13 @@
             },
             execute: async (input) => {
                 try {
-                    const results = [];
-                    for (const item of input.items) {
-                        const result = await apiFetch('POST', '/api/items', item);
-                        results.push(result);
-                    }
-                    return { success: true, created: results.length, items: results };
+                    const result = await proxyFetch({
+                        op: 'batch_create',
+                        resource: 'items',
+                        data: input.items,
+                    });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }
@@ -710,12 +771,13 @@
                             return { cancelled: true, message: 'Batch deletion cancelled by user.' };
                         }
                     }
-                    const deleted = [];
-                    for (const id of input.ids) {
-                        await apiFetch('DELETE', `/api/items/${id}`);
-                        deleted.push(id);
-                    }
-                    return { success: true, deleted: deleted.length, ids: deleted };
+                    const result = await proxyFetch({
+                        op: 'batch_delete',
+                        resource: 'items',
+                        ids: input.ids,
+                    });
+                    if (result.error) return result;
+                    return result.data;
                 } catch (err) {
                     return errorResult(err);
                 }

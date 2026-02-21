@@ -7,6 +7,7 @@ use Laminas\EventManager\Event;
 use Laminas\EventManager\SharedEventManagerInterface;
 use Laminas\ServiceManager\ServiceLocatorInterface;
 use Laminas\Mvc\Controller\AbstractController;
+use Laminas\Validator\Csrf;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Module\AbstractModule;
 use Omeka\Mvc\Controller\Plugin\Messenger;
@@ -18,6 +19,11 @@ use WebMCP\Form\ConfigForm;
  *
  * Implements the WebMCP standard (https://webmachinelearning.github.io/webmcp/)
  * to expose Omeka-S backend management capabilities to AI agents through the browser.
+ *
+ * All API operations are routed through the server-side proxy at
+ * /admin/webmcp/proxy, which uses Omeka\ApiManager internally, so they run
+ * inside Omeka-S's own request lifecycle and respect the authenticated PHP
+ * session — bypassing any JWT middleware that would block direct /api/* calls.
  */
 class Module extends AbstractModule
 {
@@ -72,8 +78,9 @@ class Module extends AbstractModule
     /**
      * Inject WebMCP JavaScript files into the admin layout.
      *
-     * Passes tool-group settings to JS via an inline config object and only
-     * loads the scripts when at least one tool group is enabled.
+     * Passes tool-group flags, the proxy URL, and a CSRF token to JS via an
+     * inline config object. Only loads the scripts when at least one tool
+     * group is enabled.
      *
      * @param Event $event
      */
@@ -106,10 +113,19 @@ class Module extends AbstractModule
 
         $view = $event->getTarget();
 
-        // Inject runtime config so JS can read enabled tool groups.
-        $configJson = json_encode($groups);
-        $view->headScript()->appendScript("window.WebMCPConfig = {$configJson};");
+        // Generate a CSRF token (stored in session) for the proxy endpoint.
+        // The same name is used in WebMCPProxyController to validate the token.
+        $csrf       = new Csrf(['name' => 'webmcp_proxy', 'timeout' => null]);
+        $csrfToken  = $csrf->getHash();
+        $proxyUrl   = $view->url('admin/webmcp-proxy');
 
+        $jsConfig     = $groups + [
+            'csrf_token' => $csrfToken,
+            'proxy_url'  => $proxyUrl,
+        ];
+        $configJson   = json_encode($jsConfig);
+
+        $view->headScript()->appendScript("window.WebMCPConfig = {$configJson};");
         $view->headScript()->appendFile(
             $view->assetUrl('js/webmcp-resources.js', 'WebMCP')
         );
@@ -133,13 +149,13 @@ class Module extends AbstractModule
         $form->init();
 
         $form->setData([
-            'webmcp_enable_items' => $settings->get('webmcp_enable_items', true) ? '1' : '0',
-            'webmcp_enable_media' => $settings->get('webmcp_enable_media', true) ? '1' : '0',
-            'webmcp_enable_item_sets' => $settings->get('webmcp_enable_item_sets', true) ? '1' : '0',
-            'webmcp_enable_sites' => $settings->get('webmcp_enable_sites', true) ? '1' : '0',
-            'webmcp_enable_users' => $settings->get('webmcp_enable_users', true) ? '1' : '0',
+            'webmcp_enable_items'        => $settings->get('webmcp_enable_items', true)        ? '1' : '0',
+            'webmcp_enable_media'        => $settings->get('webmcp_enable_media', true)        ? '1' : '0',
+            'webmcp_enable_item_sets'    => $settings->get('webmcp_enable_item_sets', true)    ? '1' : '0',
+            'webmcp_enable_sites'        => $settings->get('webmcp_enable_sites', true)        ? '1' : '0',
+            'webmcp_enable_users'        => $settings->get('webmcp_enable_users', true)        ? '1' : '0',
             'webmcp_enable_vocabularies' => $settings->get('webmcp_enable_vocabularies', true) ? '1' : '0',
-            'webmcp_enable_bulk' => $settings->get('webmcp_enable_bulk', true) ? '1' : '0',
+            'webmcp_enable_bulk'         => $settings->get('webmcp_enable_bulk', true)         ? '1' : '0',
         ]);
 
         return $renderer->formCollection($form, false);
@@ -157,12 +173,12 @@ class Module extends AbstractModule
 
         $config = $controller->params()->fromPost();
 
-        $settings->set('webmcp_enable_items', ($config['webmcp_enable_items'] ?? '0') === '1');
-        $settings->set('webmcp_enable_media', ($config['webmcp_enable_media'] ?? '0') === '1');
-        $settings->set('webmcp_enable_item_sets', ($config['webmcp_enable_item_sets'] ?? '0') === '1');
-        $settings->set('webmcp_enable_sites', ($config['webmcp_enable_sites'] ?? '0') === '1');
-        $settings->set('webmcp_enable_users', ($config['webmcp_enable_users'] ?? '0') === '1');
+        $settings->set('webmcp_enable_items', ($config['webmcp_enable_items']        ?? '0') === '1');
+        $settings->set('webmcp_enable_media', ($config['webmcp_enable_media']        ?? '0') === '1');
+        $settings->set('webmcp_enable_item_sets', ($config['webmcp_enable_item_sets']    ?? '0') === '1');
+        $settings->set('webmcp_enable_sites', ($config['webmcp_enable_sites']        ?? '0') === '1');
+        $settings->set('webmcp_enable_users', ($config['webmcp_enable_users']        ?? '0') === '1');
         $settings->set('webmcp_enable_vocabularies', ($config['webmcp_enable_vocabularies'] ?? '0') === '1');
-        $settings->set('webmcp_enable_bulk', ($config['webmcp_enable_bulk'] ?? '0') === '1');
+        $settings->set('webmcp_enable_bulk', ($config['webmcp_enable_bulk']         ?? '0') === '1');
     }
 }
