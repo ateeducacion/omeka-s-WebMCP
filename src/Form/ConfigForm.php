@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace ModuleTemplate\Form;
+namespace WebMCP\Form;
 
 use Laminas\Form\Element;
 use Laminas\Form\Form;
@@ -10,105 +10,108 @@ class ConfigForm extends Form
 {
     public function init(): void
     {
-        // Simple demo toggle
         $this->add([
-            'name' => 'moduletemplate_demo_toggle',
+            'name' => 'webmcp_enable_items',
             'type' => Element\Checkbox::class,
             'options' => [
-                'label' => 'DEMO: enable feature', // @translate
-                'info' => 'Demo field to test checkbox behavior.', // @translate
+                'label' => 'Enable Item tools', // @translate
+                'info' => 'Expose create, update, delete, search, and get-item tools to AI agents.', // @translate
                 'use_hidden_element' => true,
                 'checked_value' => '1',
                 'unchecked_value' => '0',
             ],
             'attributes' => [
-                'value' => '0',
+                'value' => '1',
             ],
         ]);
 
-        // Text input
         $this->add([
-            'name' => 'moduletemplate_demo_text',
-            'type' => Element\Text::class,
+            'name' => 'webmcp_enable_media',
+            'type' => Element\Checkbox::class,
             'options' => [
-                'label' => 'DEMO: free text', // @translate
-                'info' => 'Demo field to test single-line input.', // @translate
+                'label' => 'Enable Media tools', // @translate
+                'info' => 'Expose upload-media and list-media tools to AI agents.', // @translate
+                'use_hidden_element' => true,
+                'checked_value' => '1',
+                'unchecked_value' => '0',
             ],
             'attributes' => [
-                'placeholder' => 'A demo text…',
+                'value' => '1',
             ],
         ]);
 
-        // Textarea
         $this->add([
-            'name' => 'moduletemplate_demo_textarea',
-            'type' => Element\Textarea::class,
+            'name' => 'webmcp_enable_item_sets',
+            'type' => Element\Checkbox::class,
             'options' => [
-                'label' => 'DEMO: textarea', // @translate
-                'info' => 'Demo field to test multi-line input.', // @translate
+                'label' => 'Enable Item Set tools', // @translate
+                'info' => 'Expose create, update, delete, and list item-set tools to AI agents.', // @translate
+                'use_hidden_element' => true,
+                'checked_value' => '1',
+                'unchecked_value' => '0',
             ],
             'attributes' => [
-                'rows' => 4,
+                'value' => '1',
             ],
         ]);
 
-        // Number
         $this->add([
-            'name' => 'moduletemplate_demo_number',
-            'type' => Element\Number::class,
+            'name' => 'webmcp_enable_sites',
+            'type' => Element\Checkbox::class,
             'options' => [
-                'label' => 'DEMO: number (px)', // @translate
-                'info' => 'Demo field to test numeric input.', // @translate
+                'label' => 'Enable Site tools', // @translate
+                'info' => 'Expose create-site, update-site, and list-sites tools to AI agents.', // @translate
+                'use_hidden_element' => true,
+                'checked_value' => '1',
+                'unchecked_value' => '0',
             ],
             'attributes' => [
-                'min' => 0,
-                'max' => 2000,
-                'step' => 1,
+                'value' => '1',
             ],
         ]);
 
-        // Select
         $this->add([
-            'name' => 'moduletemplate_demo_select',
-            'type' => Element\Select::class,
+            'name' => 'webmcp_enable_users',
+            'type' => Element\Checkbox::class,
             'options' => [
-                'label' => 'DEMO: select', // @translate
-                'info' => 'Demo field to test dropdown selection.', // @translate
-                'value_options' => [
-                    'a' => 'Option A', // @translate
-                    'b' => 'Option B', // @translate
-                    'c' => 'Option C', // @translate
-                ],
+                'label' => 'Enable User tools', // @translate
+                'info' => 'Expose create, update, delete, and list-users tools to AI agents.', // @translate
+                'use_hidden_element' => true,
+                'checked_value' => '1',
+                'unchecked_value' => '0',
+            ],
+            'attributes' => [
+                'value' => '1',
             ],
         ]);
 
-        // Color
         $this->add([
-            'name' => 'moduletemplate_demo_color',
-            'type' => Element\Color::class,
+            'name' => 'webmcp_enable_vocabularies',
+            'type' => Element\Checkbox::class,
             'options' => [
-                'label' => 'DEMO: color', // @translate
-                'info' => 'Demo field to test color picker.', // @translate
+                'label' => 'Enable Vocabulary tools', // @translate
+                'info' => 'Expose list-vocabularies, list-properties, and resource-template tools.', // @translate
+                'use_hidden_element' => true,
+                'checked_value' => '1',
+                'unchecked_value' => '0',
+            ],
+            'attributes' => [
+                'value' => '1',
             ],
         ]);
 
-        // Email
         $this->add([
-            'name' => 'moduletemplate_demo_email',
-            'type' => Element\Email::class,
+            'name' => 'webmcp_enable_bulk',
+            'type' => Element\Checkbox::class,
             'options' => [
-                'label' => 'DEMO: email address', // @translate
-                'info' => 'Demo field to test email input.', // @translate
+                'label' => 'Enable Bulk Operation tools', // @translate
+                'info' => 'Expose batch-create-items and batch-delete-items tools to AI agents.', // @translate
+                'use_hidden_element' => true,
+                'checked_value' => '1',
+                'unchecked_value' => '0',
             ],
-        ]);
-
-        // URL
-        $this->add([
-            'name' => 'moduletemplate_demo_url',
-            'type' => Element\Url::class,
-            'options' => [
-                'label' => 'DEMO: URL', // @translate
-                'info' => 'Demo field to test URL input.', // @translate
+            'attributes' => [
+                'value' => '1',
             ],
         ]);
     }

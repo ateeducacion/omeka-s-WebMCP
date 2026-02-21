@@ -1,9 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace ModuleTemplate;
-
-//use ThreeDViewer\Media\FileRenderer\Viewer3DRenderer;
+namespace WebMCP;
 
 return [
     'view_manager' => [
@@ -13,8 +11,7 @@ return [
     ],
     'form_elements' => [
         'invokables' => [
-            Form\SettingsFieldset::class => Form\SettingsFieldset::class,
-            Form\SiteSettingsFieldset::class => Form\SiteSettingsFieldset::class,
+            Form\ConfigForm::class => Form\ConfigForm::class,
         ],
     ],
     'translator' => [
@@ -27,18 +24,15 @@ return [
             ],
         ],
     ],
-    'ModuleTemplate' => [
+    'WebMCP' => [
         'settings' => [
-            'activate_ModuleTemplate' => true,
-            // Demo defaults so the form shows meaningful values
-            'moduletemplate_demo_toggle' => false,
-            'moduletemplate_demo_text' => 'Default text',
-            'moduletemplate_demo_textarea' => "Line 1\nLine 2",
-            'moduletemplate_demo_number' => 500,
-            'moduletemplate_demo_select' => 'b',
-            'moduletemplate_demo_color' => '#3366ff',
-            'moduletemplate_demo_email' => 'demo@example.com',
-            'moduletemplate_demo_url' => 'https://example.com',
-        ]
+            'webmcp_enable_items' => true,
+            'webmcp_enable_media' => true,
+            'webmcp_enable_item_sets' => true,
+            'webmcp_enable_sites' => true,
+            'webmcp_enable_users' => true,
+            'webmcp_enable_vocabularies' => true,
+            'webmcp_enable_bulk' => true,
+        ],
     ],
 ];

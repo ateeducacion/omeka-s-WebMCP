@@ -12,20 +12,18 @@ class ModuleConfigTest extends TestCase
         $config = require dirname(__DIR__, 3) . '/config/module.config.php';
 
         $this->assertIsArray($config);
-        $this->assertArrayHasKey('ModuleTemplate', $config);
-        $this->assertArrayHasKey('settings', $config['ModuleTemplate']);
+        $this->assertArrayHasKey('WebMCP', $config);
+        $this->assertArrayHasKey('settings', $config['WebMCP']);
 
-        $settings = $config['ModuleTemplate']['settings'];
+        $settings = $config['WebMCP']['settings'];
         $expectedKeys = [
-            'activate_ModuleTemplate',
-            'moduletemplate_demo_toggle',
-            'moduletemplate_demo_text',
-            'moduletemplate_demo_textarea',
-            'moduletemplate_demo_number',
-            'moduletemplate_demo_select',
-            'moduletemplate_demo_color',
-            'moduletemplate_demo_email',
-            'moduletemplate_demo_url',
+            'webmcp_enable_items',
+            'webmcp_enable_media',
+            'webmcp_enable_item_sets',
+            'webmcp_enable_sites',
+            'webmcp_enable_users',
+            'webmcp_enable_vocabularies',
+            'webmcp_enable_bulk',
         ];
 
         foreach ($expectedKeys as $key) {

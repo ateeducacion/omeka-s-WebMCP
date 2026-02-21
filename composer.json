@@ -1,6 +1,6 @@
 {
-    "name": "ateeducacion/omeka-s-moduletemplate",
-    "description": "Module template for Omeka S",
+    "name": "erseco/omeka-s-webmcp",
+    "description": "WebMCP module for Omeka S - exposes management capabilities to AI agents",
     "type": "omeka-s-module",
     "license": "GPL-3.0-or-later",
     "authors": [
@@ -9,23 +9,23 @@
             "email": "ate.educacion@gobiernodecanarias.org"
         }
     ],
-    "homepage": "https://github.com/ateeducacion/omeka-s-ModuleTemplate",
+    "homepage": "https://github.com/erseco/omeka-s-WebMCP",
     "support": {
-        "issues": "https://github.com/ateeducacion/omeka-s-ModuleTemplate/issues"
+        "issues": "https://github.com/erseco/omeka-s-WebMCP/issues"
     },
     "keywords": [
         "Omeka S",
         "module",
-        "3D",
-        "three.js",
-        "model-viewer"
+        "WebMCP",
+        "AI",
+        "MCP"
     ],
     "require": {
-        "php": ">=7.4"
+        "php": ">=8.1"
     },
     "config": {
         "platform": {
-            "php": "7.4"
+            "php": "8.1"
         },
         "allow-plugins": {
             "omeka/composer-addon-installer": true
@@ -41,7 +41,7 @@
     },
     "autoload": {
         "psr-4": {
-            "ModuleTemplate\\": "src/"
+            "WebMCP\\": "src/"
         }
     },
     "autoload-dev": {
