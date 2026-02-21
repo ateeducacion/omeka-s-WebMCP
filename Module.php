@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace ModuleTemplate;
+namespace WebMCP;
 
 use Laminas\EventManager\Event;
 use Laminas\EventManager\SharedEventManagerInterface;
@@ -11,10 +11,13 @@ use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Module\AbstractModule;
 use Omeka\Mvc\Controller\Plugin\Messenger;
 use Omeka\Stdlib\Message;
-use ModuleTemplate\Form\ConfigForm;
+use WebMCP\Form\ConfigForm;
 
 /**
- * Main class for the module.
+ * Main class for the WebMCP module.
+ *
+ * Implements the WebMCP standard (https://webmachinelearning.github.io/webmcp/)
+ * to expose Omeka-S backend management capabilities to AI agents through the browser.
  */
 class Module extends AbstractModule
 {
@@ -33,96 +36,137 @@ class Module extends AbstractModule
      *
      * @param ServiceLocatorInterface $serviceLocator
      */
-    public function install(ServiceLocatorInterface $serviceLocator)
+    public function install(ServiceLocatorInterface $serviceLocator): void
     {
         $messenger = new Messenger();
-        $message = new Message("ModuleTemplate module installed.");
+        $message = new Message("WebMCP module installed.");
         $messenger->addSuccess($message);
     }
+
     /**
      * Execute logic when the module is uninstalled.
      *
      * @param ServiceLocatorInterface $serviceLocator
      */
-    public function uninstall(ServiceLocatorInterface $serviceLocator)
+    public function uninstall(ServiceLocatorInterface $serviceLocator): void
     {
         $messenger = new Messenger();
-        $message = new Message("ModuleTemplate module uninstalled.");
+        $message = new Message("WebMCP module uninstalled.");
         $messenger->addWarning($message);
     }
-    
+
     /**
-     * Register the file validator service and renderers.
+     * Register event listeners to inject WebMCP JS into the admin layout.
      *
      * @param SharedEventManagerInterface $sharedEventManager
      */
     public function attachListeners(SharedEventManagerInterface $sharedEventManager): void
     {
-        // Replace the default file validator with our custom one
+        $adminControllers = [
+            'Omeka\Controller\Admin\Index',
+            'Omeka\Controller\Admin\Item',
+            'Omeka\Controller\Admin\ItemSet',
+            'Omeka\Controller\Admin\Media',
+            'Omeka\Controller\Admin\Site',
+            'Omeka\Controller\Admin\User',
+        ];
+
+        foreach ($adminControllers as $controller) {
+            $sharedEventManager->attach(
+                $controller,
+                'view.layout',
+                [$this, 'handleAdminLayout']
+            );
+        }
     }
-    
+
+    /**
+     * Inject WebMCP JavaScript files into the admin layout.
+     *
+     * Passes tool-group settings to JS via an inline config object and only
+     * loads the scripts when at least one tool group is enabled.
+     *
+     * @param Event $event
+     */
+    public function handleAdminLayout(Event $event): void
+    {
+        $services = $this->getServiceLocator();
+        $settings = $services->get('Omeka\Settings');
+
+        $groups = [
+            'items'        => (bool) $settings->get('webmcp_enable_items', true),
+            'media'        => (bool) $settings->get('webmcp_enable_media', true),
+            'item_sets'    => (bool) $settings->get('webmcp_enable_item_sets', true),
+            'sites'        => (bool) $settings->get('webmcp_enable_sites', true),
+            'users'        => (bool) $settings->get('webmcp_enable_users', true),
+            'vocabularies' => (bool) $settings->get('webmcp_enable_vocabularies', true),
+            'bulk'         => (bool) $settings->get('webmcp_enable_bulk', true),
+        ];
+
+        // Skip script injection when all groups are disabled.
+        if (!in_array(true, $groups, true)) {
+            return;
+        }
+
+        $view = $event->getTarget();
+
+        // Inject runtime config so JS can read enabled tool groups.
+        $configJson = json_encode($groups);
+        $view->headScript()->appendScript("window.WebMCPConfig = {$configJson};");
+
+        $view->headScript()->appendFile(
+            $view->assetUrl('js/webmcp-resources.js', 'WebMCP')
+        );
+        $view->headScript()->appendFile(
+            $view->assetUrl('js/webmcp.js', 'WebMCP')
+        );
+    }
+
     /**
      * Get the configuration form for this module.
      *
      * @param PhpRenderer $renderer
      * @return string
      */
-    public function getConfigForm(PhpRenderer $renderer)
+    public function getConfigForm(PhpRenderer $renderer): string
     {
         $services = $this->getServiceLocator();
-        $config = $services->get('Config');
         $settings = $services->get('Omeka\Settings');
-        
+
         $form = new ConfigForm();
         $form->init();
 
-        // Seed form fields with saved settings or defaults
         $form->setData([
-            'activate_ModuleTemplate_cb' => $settings->get('activate_ModuleTemplate', 1),
-            'moduletemplate_demo_toggle' => $settings->get('moduletemplate_demo_toggle', false) ? '1' : '0',
-            'moduletemplate_demo_text' => $settings->get('moduletemplate_demo_text', 'Default text'),
-            'moduletemplate_demo_textarea' => $settings->get('moduletemplate_demo_textarea', "Line 1\nLine 2"),
-            'moduletemplate_demo_number' => $settings->get('moduletemplate_demo_number', 500),
-            'moduletemplate_demo_select' => $settings->get('moduletemplate_demo_select', 'b'),
-            'moduletemplate_demo_color' => $settings->get('moduletemplate_demo_color', '#3366ff'),
-            'moduletemplate_demo_email' => $settings->get('moduletemplate_demo_email', 'demo@example.com'),
-            'moduletemplate_demo_url' => $settings->get('moduletemplate_demo_url', 'https://example.com'),
+            'webmcp_enable_items' => $settings->get('webmcp_enable_items', true) ? '1' : '0',
+            'webmcp_enable_media' => $settings->get('webmcp_enable_media', true) ? '1' : '0',
+            'webmcp_enable_item_sets' => $settings->get('webmcp_enable_item_sets', true) ? '1' : '0',
+            'webmcp_enable_sites' => $settings->get('webmcp_enable_sites', true) ? '1' : '0',
+            'webmcp_enable_users' => $settings->get('webmcp_enable_users', true) ? '1' : '0',
+            'webmcp_enable_vocabularies' => $settings->get('webmcp_enable_vocabularies', true) ? '1' : '0',
+            'webmcp_enable_bulk' => $settings->get('webmcp_enable_bulk', true) ? '1' : '0',
         ]);
-        
+
         return $renderer->formCollection($form, false);
     }
-    
+
     /**
      * Handle the configuration form submission.
      *
      * @param AbstractController $controller
      */
-    public function handleConfigForm(AbstractController $controller)
+    public function handleConfigForm(AbstractController $controller): void
     {
         $services = $this->getServiceLocator();
         $settings = $services->get('Omeka\Settings');
-        
+
         $config = $controller->params()->fromPost();
 
-        $value = isset($config['activate_ModuleTemplate_cb']) ? $config['activate_ModuleTemplate_cb'] : 0;
-        $settings->set('activate_ModuleTemplate', $value);
-
-        // Persist demo settings (cast/basic normalization)
-        $settings->set(
-            'moduletemplate_demo_toggle',
-            isset($config['moduletemplate_demo_toggle'])
-                && $config['moduletemplate_demo_toggle'] === '1'
-        );
-        $settings->set('moduletemplate_demo_text', (string)($config['moduletemplate_demo_text'] ?? ''));
-        $settings->set('moduletemplate_demo_textarea', (string)($config['moduletemplate_demo_textarea'] ?? ''));
-        if (isset($config['moduletemplate_demo_number']) && is_numeric($config['moduletemplate_demo_number'])) {
-            $settings->set('moduletemplate_demo_number', (int)$config['moduletemplate_demo_number']);
-        }
-        $settings->set('moduletemplate_demo_select', (string)($config['moduletemplate_demo_select'] ?? ''));
-        $settings->set('moduletemplate_demo_color', (string)($config['moduletemplate_demo_color'] ?? ''));
-        $settings->set('moduletemplate_demo_email', (string)($config['moduletemplate_demo_email'] ?? ''));
-        $settings->set('moduletemplate_demo_url', (string)($config['moduletemplate_demo_url'] ?? ''));
+        $settings->set('webmcp_enable_items', ($config['webmcp_enable_items'] ?? '0') === '1');
+        $settings->set('webmcp_enable_media', ($config['webmcp_enable_media'] ?? '0') === '1');
+        $settings->set('webmcp_enable_item_sets', ($config['webmcp_enable_item_sets'] ?? '0') === '1');
+        $settings->set('webmcp_enable_sites', ($config['webmcp_enable_sites'] ?? '0') === '1');
+        $settings->set('webmcp_enable_users', ($config['webmcp_enable_users'] ?? '0') === '1');
+        $settings->set('webmcp_enable_vocabularies', ($config['webmcp_enable_vocabularies'] ?? '0') === '1');
+        $settings->set('webmcp_enable_bulk', ($config['webmcp_enable_bulk'] ?? '0') === '1');
     }
-    
-    // /**
 }

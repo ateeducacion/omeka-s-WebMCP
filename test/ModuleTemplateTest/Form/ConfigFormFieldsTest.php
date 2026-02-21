@@ -3,25 +3,24 @@
 namespace ModuleTemplateTest\Form;
 
 use PHPUnit\Framework\TestCase;
-use ModuleTemplate\Form\ConfigForm;
+use WebMCP\Form\ConfigForm;
 use Laminas\Form\Element;
 
 class ConfigFormFieldsTest extends TestCase
 {
-    public function testFormContainsAllDemoFields(): void
+    public function testFormContainsAllToolGroupFields(): void
     {
         $form = new ConfigForm();
         $form->init();
 
         $expected = [
-            'moduletemplate_demo_toggle' => Element\Checkbox::class,
-            'moduletemplate_demo_text' => Element\Text::class,
-            'moduletemplate_demo_textarea' => Element\Textarea::class,
-            'moduletemplate_demo_number' => Element\Number::class,
-            'moduletemplate_demo_select' => Element\Select::class,
-            'moduletemplate_demo_color' => Element\Color::class,
-            'moduletemplate_demo_email' => Element\Email::class,
-            'moduletemplate_demo_url' => Element\Url::class,
+            'webmcp_enable_items' => Element\Checkbox::class,
+            'webmcp_enable_media' => Element\Checkbox::class,
+            'webmcp_enable_item_sets' => Element\Checkbox::class,
+            'webmcp_enable_sites' => Element\Checkbox::class,
+            'webmcp_enable_users' => Element\Checkbox::class,
+            'webmcp_enable_vocabularies' => Element\Checkbox::class,
+            'webmcp_enable_bulk' => Element\Checkbox::class,
         ];
 
         foreach ($expected as $name => $type) {
@@ -31,26 +30,27 @@ class ConfigFormFieldsTest extends TestCase
         }
     }
 
-    public function testCheckboxUsesHiddenValues(): void
+    public function testCheckboxesUseHiddenValues(): void
     {
         $form = new ConfigForm();
         $form->init();
-        /** @var Element\Checkbox $el */
-        $el = $form->get('moduletemplate_demo_toggle');
-        $opts = $el->getOptions();
-        $this->assertSame('1', $opts['checked_value'] ?? null);
-        $this->assertSame('0', $opts['unchecked_value'] ?? null);
-    }
 
-    public function testSelectHasExpectedOptions(): void
-    {
-        $form = new ConfigForm();
-        $form->init();
-        /** @var Element\Select $el */
-        $el = $form->get('moduletemplate_demo_select');
-        $options = $el->getValueOptions();
-        $this->assertArrayHasKey('a', $options);
-        $this->assertArrayHasKey('b', $options);
-        $this->assertArrayHasKey('c', $options);
+        $fields = [
+            'webmcp_enable_items',
+            'webmcp_enable_media',
+            'webmcp_enable_item_sets',
+            'webmcp_enable_sites',
+            'webmcp_enable_users',
+            'webmcp_enable_vocabularies',
+            'webmcp_enable_bulk',
+        ];
+
+        foreach ($fields as $name) {
+            /** @var Element\Checkbox $el */
+            $el = $form->get($name);
+            $opts = $el->getOptions();
+            $this->assertSame('1', $opts['checked_value'] ?? null, "checked_value for $name");
+            $this->assertSame('0', $opts['unchecked_value'] ?? null, "unchecked_value for $name");
+        }
     }
 }
