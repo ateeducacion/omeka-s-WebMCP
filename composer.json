@@ -1,0 +1,58 @@
+{
+    "name": "ateeducacion/omeka-s-moduletemplate",
+    "description": "Module template for Omeka S",
+    "type": "omeka-s-module",
+    "license": "GPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "Área de Tecnología Educativa",
+            "email": "ate.educacion@gobiernodecanarias.org"
+        }
+    ],
+    "homepage": "https://github.com/ateeducacion/omeka-s-ModuleTemplate",
+    "support": {
+        "issues": "https://github.com/ateeducacion/omeka-s-ModuleTemplate/issues"
+    },
+    "keywords": [
+        "Omeka S",
+        "module",
+        "3D",
+        "three.js",
+        "model-viewer"
+    ],
+    "require": {
+        "php": ">=7.4"
+    },
+    "config": {
+        "platform": {
+            "php": "7.4"
+        },
+        "allow-plugins": {
+            "omeka/composer-addon-installer": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require-dev": {
+        "squizlabs/php_codesniffer": "*",
+        "phpunit/phpunit": "*",
+        "zerocrates/extract-tagged-strings": "dev-master",
+        "laminas/laminas-form": "^3.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "ModuleTemplate\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ModuleTemplateTest\\": "test/"
+        }
+    },
+    "repositories": [
+        {
+        "type": "vcs",
+        "url": "https://github.com/zerocrates/extract-tagged-strings.git"
+        }
+    ]
+}
