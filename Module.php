@@ -62,22 +62,11 @@ class Module extends AbstractModule
      */
     public function attachListeners(SharedEventManagerInterface $sharedEventManager): void
     {
-        $adminControllers = [
-            'Omeka\Controller\Admin\Index',
-            'Omeka\Controller\Admin\Item',
-            'Omeka\Controller\Admin\ItemSet',
-            'Omeka\Controller\Admin\Media',
-            'Omeka\Controller\Admin\Site',
-            'Omeka\Controller\Admin\User',
-        ];
-
-        foreach ($adminControllers as $controller) {
-            $sharedEventManager->attach(
-                $controller,
-                'view.layout',
-                [$this, 'handleAdminLayout']
-            );
-        }
+        $sharedEventManager->attach(
+            '*',
+            'view.layout',
+            [$this, 'handleAdminLayout']
+        );
     }
 
     /**
@@ -91,6 +80,13 @@ class Module extends AbstractModule
     public function handleAdminLayout(Event $event): void
     {
         $services = $this->getServiceLocator();
+
+        // Only inject scripts on admin pages.
+        $status = $services->get('Omeka\Status');
+        if (!$status->isAdminRequest()) {
+            return;
+        }
+
         $settings = $services->get('Omeka\Settings');
 
         $groups = [
