@@ -78,12 +78,16 @@ package:
 		echo "Error: VERSION not specified. Use 'make package VERSION=1.2.3'"; \
 		exit 1; \
 	fi
-	@echo "Updating version to $(VERSION) in module.ini..."
-	$(SED_INPLACE) 's/^\([[:space:]]*version[[:space:]]*=[[:space:]]*\).*$$/\1"$(VERSION)"/' config/module.ini
-	@echo "Creating ZIP archive: WebMCP-$(VERSION).zip..."
-	composer archive --format=zip --file="WebMCP-$(VERSION)"
-	@echo "Restoring version to 0.0.0 in module.ini..."
-	$(SED_INPLACE) 's/^\([[:space:]]*version[[:space:]]*=[[:space:]]*\).*$$/\1"0.0.0"/' config/module.ini
+	@echo "Building ZIP with top-level directory: WebMCP/"
+	@TMP_DIR=$$(mktemp -d); \
+	STAGE_DIR="$$TMP_DIR/WebMCP"; \
+	composer archive --format=zip --file="WebMCP-$(VERSION)-raw" >/dev/null; \
+	mkdir -p "$$STAGE_DIR"; \
+	unzip -q "WebMCP-$(VERSION)-raw.zip" -d "$$STAGE_DIR"; \
+	$(SED_INPLACE) 's/^\([[:space:]]*version[[:space:]]*=[[:space:]]*\).*$$/\1"$(VERSION)"/' "$$STAGE_DIR/config/module.ini"; \
+	(cd "$$TMP_DIR" && zip -rq "$$OLDPWD/WebMCP-$(VERSION).zip" "WebMCP"); \
+	rm -rf "$$TMP_DIR" "WebMCP-$(VERSION)-raw.zip"
+	@echo "Created WebMCP-$(VERSION).zip with internal root folder WebMCP/"
 
 # Generate .pot template from translate() and // @translate
 generate-pot:
