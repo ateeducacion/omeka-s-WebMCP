@@ -6,8 +6,10 @@
 /.gitattributes          export-ignore
 /.github/                export-ignore
 /.gitignore              export-ignore
+/.claude/                export-ignore
 /.php-cs-fixer.dist.php  export-ignore
 /.tx/                    export-ignore
+/*.zip                   export-ignore
 /data/					 export-ignore
 /language/*.po           export-ignore
 /language/*.pot          export-ignore
