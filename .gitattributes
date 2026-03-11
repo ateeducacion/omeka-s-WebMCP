@@ -8,6 +8,7 @@
 /.gitignore              export-ignore
 /.claude/                export-ignore
 /.php-cs-fixer.dist.php  export-ignore
+blueprint.json           export-ignore
 /.tx/                    export-ignore
 /*.zip                   export-ignore
 /data/					 export-ignore
