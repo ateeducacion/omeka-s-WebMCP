@@ -1,5 +1,10 @@
 # WebMCP — Omeka-S Module
 
+<a href="https://ateeducacion.github.io/omeka-s-playground/?blueprint=https%3A%2F%2Fraw.githubusercontent.com%2Fateeducacion%2Fomeka-s-WebMCP%2Frefs%2Fheads%2Fmain%2Fblueprint.json">
+  <img src="https://raw.githubusercontent.com/ateeducacion/omeka-s-playground/main/ogimage.png" alt="Try WebMCP in your browser" width="220">
+</a><br>
+<small><a href="https://ateeducacion.github.io/omeka-s-playground/?blueprint=https%3A%2F%2Fraw.githubusercontent.com%2Fateeducacion%2Fomeka-s-WebMCP%2Frefs%2Fheads%2Fmain%2Fblueprint.json">Try in your browser</a></small>
+
 An Omeka-S module that implements the [WebMCP standard](https://webmachinelearning.github.io/webmcp/) to expose Omeka-S backend management capabilities to AI agents through the browser.
 
 ## What is WebMCP?
