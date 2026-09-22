@@ -20,3 +20,8 @@ foreach ($stubs as $class => $file) {
         require $file;
     }
 }
+
+require_once __DIR__ . "/Support/Omeka/Module/AbstractModule.php";
+require_once __DIR__ . "/Support/Omeka/Stdlib/Message.php";
+require_once __DIR__ . "/Support/Omeka/Mvc/Controller/Plugin/Messenger.php";
+require_once dirname(__DIR__) . "/Module.php";

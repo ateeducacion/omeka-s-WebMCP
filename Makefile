@@ -255,3 +255,10 @@ import-sample:
 enable-module:
 	@echo "Enabling WebMCP module inside Omeka S..."
 	docker compose exec omekas sh -lc 'omeka-s-cli module:install WebMCP || true'
+
+# Generate coverage for all module code and enforce the CI threshold.
+.PHONY: test-coverage
+test-coverage:
+	@rm -f coverage.xml
+	php -d pcov.directory=. -d pcov.exclude='~/(vendor|test)/~' vendor/bin/phpunit -c test/phpunit.xml --coverage-clover coverage.xml --coverage-text
+	php test/check-coverage.php coverage.xml 90
