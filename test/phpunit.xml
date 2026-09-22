@@ -10,6 +10,7 @@
     </testsuites>
     <source>
         <include>
+            <file>../Module.php</file>
             <directory suffix=".php">../src</directory>
         </include>
     </source>
