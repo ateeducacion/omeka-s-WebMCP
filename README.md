@@ -27,11 +27,11 @@ make test        # run PHPUnit tests
 make lint        # run PHP code style checker
 ```
 
-Open `http://localhost:8080`. Users created automatically:
+Open `http://localhost:8080`. Users created automatically (from `blueprint.json`, the same file as the Omeka S Playground):
 
 | Email | Role | Password |
 |-------|------|----------|
-| `admin@example.com` | global_admin | `PLEASE_CHANGEME` |
+| `admin@example.com` | global_admin | `password` |
 | `editor@example.com` | editor | `1234` |
 
 ## Installation
